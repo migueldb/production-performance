@@ -1,0 +1,11 @@
+name: Publish Document
+title:
+username:
+account: rpubs
+server: rpubs.com
+hostUrl: rpubs.com
+appId: https://api.rpubs.com/api/v1/document/767521/107076035efa4734ac3044dfb6f067c3
+bundleId: https://api.rpubs.com/api/v1/document/767521/107076035efa4734ac3044dfb6f067c3
+url: http://rpubs.com/MiguelDB/767521/edit
+when: 1620624385.91763
+lastSyncTime: 1620624385.91763

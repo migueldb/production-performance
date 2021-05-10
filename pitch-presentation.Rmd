@@ -1,0 +1,282 @@
+---
+title: "Production Performance"
+author: "Miguel Duarte B."
+date: "5/9/2021"
+output: ioslides_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## Introduction
+
+Hydraulic fracturing is a process applied to unconventional reservoirs to create
+artificial fractures connecting the pores where hydrocarbons are stored. The
+estimation of formation properties such as permeability and effective half
+fracture length is an important step in analyzing production performance.
+
+Luo et al., 2016, developed a method to calculate permeability and effective
+half length using the square root plot of the production.
+
+## Methodology
+
+1. Select the well for analysis from the drop-down menu
+2. Select the end of the linear flow using the slider. The idea is to fit the
+blue line (linear model) as close as possible to straight line formed by the
+black dots.  This is equivalent to estimate visually the end of linear flow (red
+line) and pass this value to the model
+3. If necessary adjust the max value of Y using the slider
+4. The estimated values will be shown at the bottom of the plot
+
+Check the app: [Production Performance Shiny App](https://migueldb.shinyapps.io/production-performance/)
+
+## Square Root of Time Plot
+
+```{r prepro, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE}
+## global.R
+## This file is run once before the app starts.  All the objects created here
+## are available for ui.R and server.R
+# 
+
+# Make sure the environment is clean
+rm(list = ls())
+
+# Load libraries
+library(tidyverse)
+
+# Conversion factors
+feetToMeters <- 1200/3937
+psiToMPa <- 0.00689475729
+stbTom3 <- 0.1589872943
+
+# # Make sure this is the right folder
+# print(getwd())
+
+# Find and read the source files
+folderPath <- file.path(getwd(), "production-performance/Raw/SPE")
+productionFile <- file.path(folderPath, "production_data.txt")
+wellDataFile <- file.path(folderPath, "well_data.txt")
+
+# Read production
+production <- read_csv(
+    productionFile,
+    col_types = cols(
+        Lease = col_character(),
+        `Pressure Source` = col_character(),
+        .default = col_double()
+    ))
+# Remove double space from column names
+names(production) <- gsub("  \\(", " \\(", names(production))
+
+# Read well data
+wellData <- read_csv(
+    wellDataFile,
+    col_names = FALSE,
+    col_types = cols(.default = col_character())
+    )
+
+# Need to transform "transposed" data from csv file
+wellData <- wellData %>% t() %>% as_tibble(.name_repair = "unique")
+
+names(wellData) <- wellData %>% slice(1) %>% as_vector() %>% make.unique()
+wellData <- wellData %>% slice(-1)
+
+# Remove columns with only NA values
+not_all_na <- function(x) any(!is.na(x))
+not_any_na <- function(x) all(!is.na(x))
+
+production <- production %>% select(where(not_all_na))
+wellData <- wellData %>%
+    # Remove variables with only NA values
+    select(where(not_all_na)) %>%
+    # Parse column types
+    mutate(across(everything(), parse_guess)) %>%
+    # parse character columns with percentages
+    mutate_if(~any(str_detect(.,"\\d+\\.?\\d*%")), ~parse_number(.)/100) %>%
+    # Mutate If has been superseded with mutate across where combination but
+    # straight conversion doesn't work.  Check:
+    # https://dplyr.tidyverse.org/articles/colwise.html#how-do-you-convert-existing-code-
+    #mutate(across(where(~any(str_detect(.x ,"\\d+\\.?\\d*%"))), ~parse_number(.x)/100))
+    mutate(`# of Total Proppant (Lbs)` = parse_number(`# of Total Proppant (Lbs)`))
+
+# Summarize production data by lease
+MMscf_to_MMboe <- 1/5800.6408
+
+productionSummary <- production %>%
+    group_by(Lease) %>%
+    summarise(
+        `Cummulative Oil Volume (stb)` = sum(`Oil Volume (stb)`, na.rm = TRUE),
+        `Cummulative Gas Volume (MMscf)` = sum(`Gas Volume (MMscf)`, na.rm = TRUE),
+        `Cummulative Water Volume (stb)` = sum(`Water Volume (stb)`, na.rm = TRUE)
+    ) %>%
+    ungroup() %>%
+    mutate(
+        `Cummulative Hydrocarbons Volume (MMboe)` =
+            `Cummulative Oil Volume (stb)` +
+            `Cummulative Gas Volume (MMscf)` *MMscf_to_MMboe
+    )
+
+# # Summarize production data by lease - 1st 100 days
+# productionSummary100 <- production %>%
+#     group_by(Lease) %>%
+#     slice(1:100) %>%
+#     summarise(
+#         `Cummulative Oil Volume (stb) - 100 days` = sum(`Oil Volume (stb)`, na.rm = TRUE),
+#         `Cummulative Gas Volume (MMscf) - 100 days` = sum(`Gas Volume (MMscf)`, na.rm = TRUE),
+#         `Cummulative Water Volume (stb) - 100 days` = sum(`Water Volume (stb)`, na.rm = TRUE)
+#     ) %>%
+#     ungroup() %>%
+#     mutate(
+#         `Cummulative Hydrocarbons Volume (MMboe) - 100 days` =
+#             `Cummulative Oil Volume (stb) - 100 days` +
+#             `Cummulative Gas Volume (MMscf) - 100 days` * MMscf_to_MMboe
+#     )
+# 
+# # Summarize production data by lease - 1st 200 days
+# productionSummary200 <- production %>%
+#     group_by(Lease) %>%
+#     slice(1:200) %>%
+#     summarise(
+#         `Cummulative Oil Volume (stb) - 200 days` = sum(`Oil Volume (stb)`, na.rm = TRUE),
+#         `Cummulative Gas Volume (MMscf) - 200 days` = sum(`Gas Volume (MMscf)`, na.rm = TRUE),
+#         `Cummulative Water Volume (stb) - 200 days` = sum(`Water Volume (stb)`, na.rm = TRUE)
+#     ) %>%
+#     ungroup() %>%
+#     mutate(
+#         `Cummulative Hydrocarbons Volume (MMboe) - 200 days` =
+#             `Cummulative Oil Volume (stb) - 200 days` +
+#             `Cummulative Gas Volume (MMscf) - 200 days` * MMscf_to_MMboe
+#     )
+
+
+# From well data filter out unnecessary data
+wellDataSummary <- wellData %>%
+    select(
+        Lease,
+        `Formation/Reservoir`,
+        `Initial Pressure Estimate (psi)`,
+        `Reservoir Temperature (deg F)`,
+        `Net Pay (ft)`,
+        `Wellbore Diameter (ft)`,
+        Porosity,
+        `Oil Gravity (API)`,
+        `# Stages`,
+        `# Clusters`,
+        `# Clusters per Stage`,
+        `# of Total Proppant (Lbs)`,
+        `Total Fluid (Bbls)`,
+        `Lateral Length (ft)`,
+        `Sandface Temp (deg F)`
+    ) %>%
+    # Calculate the necessary variables
+    mutate(
+        `Spacing (ft)` =  `Lateral Length (ft)` / `# Stages`,
+        `Spacing (m)` = `Spacing (ft)` * feetToMeters,
+        `Lateral Length (m)` = `Lateral Length (ft)` * feetToMeters,
+        `Net Pay (m)` = `Net Pay (ft)` * feetToMeters,
+        # Viscosity calculations based on Bennison correlation
+        # https://petrowiki.spe.org/Oil_viscosity
+        `Viscosity (mPa s)` = 10^(-0.8021*`Oil Gravity (API)` + 23.8765)*`Reservoir Temperature (deg F)`^(0.31458*`Oil Gravity (API)` - 9.21592),
+        `Total Compressibility (MPa -1)` = 0.004,
+        `Payzone Thickness (m)` = `Net Pay (ft)` * feetToMeters
+        )
+
+# Combine production summary and well data
+# extendedWellData <- inner_join(productionSummary100, productionSummary200, by = 'Lease') %>%
+#     inner_join(productionSummary, by = 'Lease') %>%
+#     inner_join(wellDataSummary, by = 'Lease') %>%
+extendedWellData <- inner_join(productionSummary, wellDataSummary, by = 'Lease') %>%
+    # Create GOR variable and oil or gas well designation based on 100,000 scf/bbl limit
+    mutate(`GOR scf/bbl` = `Cummulative Gas Volume (MMscf)` * 1e6 / `Cummulative Oil Volume (stb)`) %>%
+    mutate(Designation = if_else(`GOR scf/bbl` >= 1e5, "Gas Well", "Oil Well"))
+
+# Create list of oil wells based on GOR criteria
+oilWells <- extendedWellData %>% filter(Designation == "Oil Well") %>% pull(Lease) %>% unique()
+
+# Calculate necessary variables on production df and remove unnecessary gas
+# wells
+
+IRP <- function(well, df = wellDataSummary) df %>% filter(Lease == well) %>% pull(`Initial Pressure Estimate (psi)`)
+production <- production %>%
+    filter(Lease %in% oilWells) %>%
+    mutate(
+        `Calculated Sandface Pressure (MPA(a))` = `Calculated Sandface Pressure (psi(a))` * psiToMPa
+    ) %>%
+    rowwise() %>%
+    mutate(`Initial Reservoir Pressure (psi(a))` = IRP(Lease)) %>%
+    ungroup() %>%
+    mutate(
+        `Initial Reservoir Pressure (MPa)` = `Initial Reservoir Pressure (psi(a))` * psiToMPa,
+        `Active Pressure (MPa)` = `Active Pressure (psi(a))` * psiToMPa,
+        # `Drawdown Pressure (psi(a))` = `Calculated Sandface Pressure (psi(a))` - `Active Pressure (psi(a))`,
+        # `Drawdown Pressure (MPa)` = `Calculated Sandface Pressure (MPA(a))` - `Active Pressure (MPa)`,
+        `Drawdown Pressure (psi(a))` = `Initial Reservoir Pressure (psi(a))` - `Active Pressure (psi(a))`,
+        `Drawdown Pressure (MPa)` = `Initial Reservoir Pressure (MPa)` - `Active Pressure (MPa)`,
+        `Oil Volume (m3)` = `Oil Volume (stb)` * stbTom3,
+        `Normalized Pressure (psi(a)/stb/day)` = if_else(`Oil Volume (stb)` == 0, 0, `Drawdown Pressure (psi(a))` / `Oil Volume (stb)`),
+        `Normalized Pressure (MPa/m3/day)` = if_else(`Oil Volume (m3)` == 0, 0, `Drawdown Pressure (MPa)` / `Oil Volume (m3)`)
+        )
+
+
+
+
+
+## Define useful functions available for ui.R and server.R ####
+
+# Root square of time plot and lm coefficients
+plot.sqrt.time <- function(well, divider, df = production, maxY = 5){
+    ## Load libraries
+    library(tidyverse)
+    library(ggplot2)
+    # Filter dataframe by well and apply divider as upper limit
+    df <- df %>% filter(Lease == well)
+    
+    df_r <- df %>% filter(`Time (Days)` <= divider^2)
+    
+    model <- lm(`Normalized Pressure (MPa/m3/day)` ~ sqrt(`Time (Days)`), df_r)
+    intercept <- coef(model)[1]
+    slope <- coef(model)[2]
+    
+    g <- df %>%
+        ggplot(aes(sqrt(`Time (Days)`), `Normalized Pressure (MPa/m3/day)`, )) +
+        geom_point() +
+        geom_abline(intercept = intercept, slope = slope, colour = "blue") +
+        geom_vline(xintercept = divider, colour = "red") +
+        ylim(0, maxY)
+    
+    return(list(g, intercept, slope))
+}
+
+# Calculate permeability
+permeability <- function(d, phi, mu, c_t = 0.0004, T_elf){
+    79.014*d^2*phi*mu*c_t/4/T_elf
+}
+
+# Calculate permeability
+frac.half.length <- function(B = 1, T_elf, m, l_e, h, phi, c_t = 0.0004){
+    4.972*B*sqrt(T_elf)/m/l_e/h/phi/c_t
+}
+```
+
+```{r sqrtplot, message=FALSE, warning=FALSE, dependson='prepro', fig.dim=c(5,2.5), fig.align='center'}
+plot.sqrt.time("EAGLE", 20)[[1]]
+```
+
+<font size="2"> The permeability can be calculated using the limit of linear flow (red line) using the app.</font>
+```{r permeability, dependson='prepro', echo=TRUE, include=TRUE}
+
+df <- wellDataSummary %>% filter(Lease == "EAGLE")
+        d <- df %>% pull(`Spacing (m)`); phi <- df %>% pull(Porosity)
+        mu <- df %>% pull(`Viscosity (mPa s)`); T_elf <- 20^2
+        
+        permeability(d = d, phi = phi, mu = mu, T_elf = T_elf)
+
+```
+
+## References
+
+- Dataset: SPE Data Repository: Data Set: 1, Well Number: all wells, From URL: [https://www.spe.org/en/industry/data-repository/](https://www.spe.org/en/industry/data-repository/)
+- Luo, H., Li, H., Zhang, J. et al. Production performance analysis of fractured horizontal well in tight oil reservoir. J Petrol Explor Prod Technol 8, 229–247 (2018). [https://doi.org/10.1007/s13202-017-0339-x](https://doi.org/10.1007/s13202-017-0339-x)
+- [https://github.com/migueldb/production-performance](https://github.com/migueldb/production-performance)
+- [Production Performance Shiny App](https://migueldb.shinyapps.io/production-performance/)

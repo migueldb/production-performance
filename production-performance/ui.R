@@ -92,10 +92,10 @@ fluidPage(
                         "Documentation",
                         h3("Theory"),
                         p("Hydraulic fracturing is a process applied to unconventional 
-                          reservoirs to create artificial fractures conecting the pores
+                          reservoirs to create artificial fractures connecting the pores
                           where hydrocarbons are stored. The estimation of formation
                           properties such as permeability and effective half fracture
-                          length is an importan step in analyzing production performance. 
+                          length is an important step in analyzing production performance. 
                           Luo et al., 2016, developed a method to calculate permeability
                           and effective half length using the square root plot of the
                           production."),
@@ -110,7 +110,7 @@ fluidPage(
                               of linear flow (red line) and pass this value to the
                               model"),
                             tags$li("If necessary adjust the max value of Y using the slider"),
-                            tags$li("The estimated values are shown at the bottom of the plot")
+                            tags$li("The estimated values will be shown at the bottom of the plot")
                         )
                         
                         ), 
