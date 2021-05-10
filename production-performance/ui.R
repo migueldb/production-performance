@@ -130,7 +130,14 @@ fluidPage(
                             tags$a(
                                 href = "https://doi.org/10.1007/s13202-017-0339-x",
                                 "https://doi.org/10.1007/s13202-017-0339-x"
+                                ),
+                            tags$li(
+                                tags$a(
+                                    href = "https://github.com/migueldb/production-performance",
+                                    "https://github.com/migueldb/production-performance"
                                 )
+                            )
+                            
                         )
                     )
             )
