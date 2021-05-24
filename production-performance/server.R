@@ -67,4 +67,18 @@ shinyServer(function(input, output) {
         frac.half.length(T_elf = T_elf, m = m, l_e = l_e, h = h, phi = phi)
     })
     
+    output$dynamicReserves <- renderText({
+        sqrtDaysInput <- input$sliderSqrtDays
+        maxYInput <- input$sliderMaxY
+        wellInput <- input$selectWell
+        
+        df <- wellDataSummary %>% filter(Lease == wellInput)
+        
+        n_f <- df %>% pull(`# Stages`)
+        T_elf <- input$sliderSqrtDays^2
+        m <- plot.sqrt.time(wellInput, divider = sqrtDaysInput, maxY = maxYInput)[[3]]
+        
+        OOIP_srv(n_f = n_f, T_elf = T_elf, m = m)/10^6
+    })
+    
 })

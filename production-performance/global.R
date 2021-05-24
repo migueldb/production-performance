@@ -214,10 +214,21 @@ plot.sqrt.time <- function(well, divider, df = production, maxY = 5){
 
 # Calculate permeability
 permeability <- function(d, phi, mu, c_t = 0.0004, T_elf){
+    # The formula requires porosity in %
+    phi <- phi*100
+    
     79.014*d^2*phi*mu*c_t/4/T_elf
 }
 
 # Calculate permeability
 frac.half.length <- function(B = 1, T_elf, m, l_e, h, phi, c_t = 0.0004){
+    # The formula requires porosity in %
+    phi <- phi*100
+    
     4.972*B*sqrt(T_elf)/m/l_e/h/phi/c_t
+}
+
+# Calculate dynamic reserves
+OOIP_srv <- function(n_f, S_oi = 0.7, T_elf, c_t = 0.0004, m){
+    8.967*n_f*S_oi*sqrt(T_elf)/c_t/m
 }
